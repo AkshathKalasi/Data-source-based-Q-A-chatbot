@@ -1,0 +1,76 @@
+# Environment variables
+.env
+*.env
+
+# API Keys and secrets
+**/secrets/
+**/*secret*
+**/*key*
+
+# Database files
+*.sqlite3
+db.sqlite3
+*.db
+
+# Vector database
+chroma_db/
+*.chroma
+
+# Uploaded files
+temp_uploads/
+uploads/
+media/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Django
+*.log
+local_settings.py
+staticfiles/
+media/
+
+# Backup files
+*.bak
+Backup*.py
+
+# Temporary files
+*.tmp
+*.temp
+ChatState

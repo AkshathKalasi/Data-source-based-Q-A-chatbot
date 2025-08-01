@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KALASI's Chatbot</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #000000 0%, #1a1a2e 50%, #16213e 100%);
+            color: #00ffff;
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        body::after {
+            content: '⚡';
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 30vw;
+            opacity: 0.03;
+            z-index: -1;
+            pointer-events: none;
+        }
+        
+        .ninja-star {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: linear-gradient(45deg, #8a2be2, #00ffff);
+            clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+            animation: float 6s ease-in-out infinite;
+            opacity: 0.7;
+        }
+        
+        .ninja-star:nth-child(1) { top: 10%; left: 10%; animation-delay: 0s; }
+        .ninja-star:nth-child(2) { top: 20%; right: 15%; animation-delay: 2s; }
+        .ninja-star:nth-child(3) { bottom: 15%; left: 20%; animation-delay: 4s; }
+        .ninja-star:nth-child(4) { bottom: 25%; right: 10%; animation-delay: 1s; }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(180deg); }
+        }
+        
+        .container {
+            display: flex;
+            height: 100vh;
+            backdrop-filter: blur(10px);
+        }
+        
+        .sidebar {
+            width: 350px;
+            background: rgba(0, 0, 0, 0.8);
+            border-right: 2px solid rgba(138, 43, 226, 0.5);
+            padding: 20px;
+            overflow-y: auto;
+            box-shadow: 5px 0 15px rgba(0, 255, 255, 0.1);
+        }
+        
+        .sidebar h3 {
+            color: #00ffff;
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 18px;
+            text-shadow: 0 2px 4px rgba(0, 255, 255, 0.5);
+        }
+        
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: rgba(0, 0, 0, 0.6);
+        }
+        
+        .chat-header {
+            background: linear-gradient(135deg, #8a2be2 0%, #00ffff 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0, 255, 255, 0.3);
+        }
+        
+        .chat-header h2 {
+            font-size: 24px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.4);
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            padding: 15px;
+            border-radius: 15px;
+            max-width: 80%;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+        }
+        
+        .user-message {
+            background: linear-gradient(135deg, #8a2be2 0%, #00ffff 100%);
+            color: white;
+            margin-left: auto;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+        
+        .assistant-message {
+            background: rgba(0, 0, 0, 0.8);
+            color: #00ffff;
+            border: 1px solid rgba(138, 43, 226, 0.3);
+        }
+        
+        .sources {
+            margin-top: 10px;
+            font-size: 12px;
+            color: rgba(0, 255, 255, 0.7);
+            border-top: 1px solid rgba(138, 43, 226, 0.3);
+            padding-top: 8px;
+        }
+        
+        .awaiting-source {
+            background: rgba(138, 43, 226, 0.2);
+            border: 2px solid #8a2be2;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 20px;
+            text-align: center;
+            color: #00ffff;
+            box-shadow: 0 4px 15px rgba(138, 43, 226, 0.3);
+        }
+        
+        .chat-input {
+            display: flex;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border-top: 2px solid rgba(138, 43, 226, 0.3);
+        }
+        
+        .chat-input input {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid rgba(138, 43, 226, 0.3);
+            border-radius: 25px;
+            background: rgba(0, 0, 0, 0.6);
+            color: #00ffff;
+            font-size: 14px;
+            margin-right: 10px;
+            transition: all 0.3s ease;
+        }
+        
+        .chat-input input::placeholder {
+            color: rgba(0, 255, 255, 0.5);
+        }
+        
+        .chat-input input:focus {
+            outline: none;
+            border-color: #00ffff;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+        }
+        
+        .chat-input button {
+            padding: 15px 25px;
+            background: linear-gradient(135deg, #8a2be2 0%, #00ffff 100%);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(138, 43, 226, 0.4);
+        }
+        
+        .chat-input button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 255, 255, 0.6);
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #00ffff;
+            font-size: 14px;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+        }
+        
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid rgba(138, 43, 226, 0.3);
+            border-radius: 10px;
+            font-size: 14px;
+            background: rgba(0, 0, 0, 0.6);
+            color: #00ffff;
+            transition: all 0.3s ease;
+        }
+        
+        .form-group input::placeholder, .form-group textarea::placeholder {
+            color: rgba(0, 255, 255, 0.5);
+        }
+        
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: #00ffff;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 12px 20px;
+            background: linear-gradient(135deg, #8a2be2 0%, #00ffff 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(138, 43, 226, 0.4);
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 255, 255, 0.6);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid rgba(0, 255, 255, 0.3);
+            margin-bottom: 20px;
+            border-radius: 10px 10px 0 0;
+            overflow: hidden;
+        }
+        
+        .tab {
+            flex: 1;
+            padding: 15px;
+            cursor: pointer;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.6);
+            transition: all 0.3s ease;
+            font-weight: 500;
+            color: #00ffff;
+            border: 1px solid rgba(138, 43, 226, 0.3);
+        }
+        
+        .tab:hover {
+            background: rgba(138, 43, 226, 0.3);
+        }
+        
+        .tab.active {
+            background: linear-gradient(135deg, #8a2be2 0%, #00ffff 100%);
+            color: white;
+            box-shadow: 0 2px 10px rgba(0, 255, 255, 0.4);
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+        
+        .tab-content {
+            display: none;
+            animation: slideIn 0.3s ease;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-10px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        
+        .chat-messages::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .chat-messages::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+        }
+        
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, #8a2be2 0%, #00ffff 100%);
+            border-radius: 10px;
+        }
+        
+        .chat-messages::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(135deg, #00ffff 0%, #8a2be2 100%);
+        }
+        
+        @media (max-width: 768px) {
+            .container { flex-direction: column; }
+            .sidebar { width: 100%; height: auto; }
+            body::after { font-size: 20vw; }
+        }
+
+        .feedback-form {
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid rgba(138, 43, 226, 0.3);
+        }
+
+        .rating-buttons button {
+            margin: 2px;
+            padding: 5px 10px;
+            background: #8a2be2;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        .feedback-btn {
+            background: #00ffff;
+            color: black;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin: 5px 0;
+        }
+
+        .confidence {
+            font-size: 12px;
+            color: rgba(0, 255, 255, 0.7);
+            margin-top: 5px;
+        }
+
+        .loading {
+            color: #8a2be2;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="ninja-star"></div>
+    <div class="ninja-star"></div>
+    <div class="ninja-star"></div>
+    <div class="ninja-star"></div>
+
+    <div class="container">
+        <div class="sidebar">
+            <h3>⚡ Data Sources</h3>
+            
+            <div class="tabs">
+                <div class="tab active" onclick="switchTab('url')">URL</div>
+                <div class="tab" onclick="switchTab('file')">File</div>
+            </div>
+            
+            <div id="url-tab" class="tab-content active">
+                <div class="form-group">
+                    <label>Source Type:</label>
+                    <select id="source-type">
+                        <option value="wikipedia">Wikipedia</option>
+                        <option value="web">Web URL</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>URL(s) (comma-separated):</label>
+                    <textarea id="source-input" rows="3" placeholder="Enter URLs here..."></textarea>
+                </div>
+                <button class="btn" id="add-source-btn" onclick="addDataSource()">Add URL Data</button>
+            </div>
+            
+            <div id="file-tab" class="tab-content">
+                <div class="form-group">
+                    <label>Upload File:</label>
+                    <input type="file" id="file-input" accept=".pdf,.txt">
+                </div>
+                <button class="btn" id="upload-file-btn" onclick="uploadFile()">Process File</button>
+            </div>
+        </div>
+        
+        <div class="chat-area">
+            <div class="chat-header">
+                <h2>⚡ KALASI'S CHATBOT</h2>
+            </div>
+            
+            <div class="chat-messages" id="chat-messages"></div>
+            
+            <div id="awaiting-source-notice" class="awaiting-source" style="display: none;">
+                <p><strong>⚡ Need More Information</strong><br>
+                I don't have enough information to answer your question. Please add relevant data sources using the sidebar.</p>
+            </div>
+            
+            <div class="chat-input">
+                <input type="text" id="message-input" placeholder="Ask KALASI Ninja a question..." onkeypress="handleKeyPress(event)">
+                <button id="send-btn" onclick="sendMessage()">Send ⚡</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let sessionId = generateUUID();
+        let awaitingSource = false;
+        let selectedRating = null;
+        let isProcessing = false;
+
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            document.querySelector(`[onclick="switchTab('${tabName}')"]`).classList.add('active');
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+        }
+
+        function addMessage(role, content, sources = [], messageId = null, confidenceScore = null) {
+            const messagesDiv = document.getElementById('chat-messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}-message`;
+            
+            if (messageId) {
+                messageDiv.setAttribute('data-message-id', messageId);
+            }
+            
+            let sourcesHtml = '';
+            if (sources && sources.length > 0) {
+                sourcesHtml = `<div class="sources">⚡ Sources: ${sources.join(', ')}</div>`;
+            }
+            
+            let confidenceHtml = '';
+            if (confidenceScore !== null && role === 'assistant') {
+                confidenceHtml = `<div class="confidence">Confidence: ${(confidenceScore * 100).toFixed(1)}%</div>`;
+            }
+            
+            let feedbackHtml = '';
+            if (role === 'assistant' && messageId) {
+                feedbackHtml = `
+                    <div style="margin-top: 10px;">
+                        <button onclick="showFeedbackForm(${messageId})" class="feedback-btn">Provide Feedback</button>
+                    </div>
+                `;
+            }
+            
+            messageDiv.innerHTML = `
+                <div class="message-content">
+                    ${content}
+                    ${sourcesHtml}
+                    ${confidenceHtml}
+                    ${feedbackHtml}
+                </div>
+            `;
+            
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function showFeedbackForm(messageId) {
+            const feedbackHtml = `
+                <div id="feedback-${messageId}" class="feedback-form">
+                    <h4>Rate this response:</h4>
+                    <div class="rating-buttons">
+                        <button onclick="submitRating(${messageId}, 1)">1 ⚡</button>
+                        <button onclick="submitRating(${messageId}, 2)">2 ⚡</button>
+                        <button onclick="submitRating(${messageId}, 3)">3 ⚡</button>
+                        <button onclick="submitRating(${messageId}, 4)">4 ⚡</button>
+                        <button onclick="submitRating(${messageId}, 5)">5 ⚡</button>
+                    </div>
+                    <textarea id="feedback-comment-${messageId}" placeholder="Additional comments..." rows="2" style="width: 100%; margin: 10px 0;"></textarea>
+                    <textarea id="corrected-answer-${messageId}" placeholder="Provide correct answer (optional)..." rows="3" style="width: 100%; margin: 10px 0;"></textarea>
+                    <button onclick="submitFeedback(${messageId})" style="background: #00ffff; color: black;">Submit Feedback</button>
+                    <button onclick="requestHumanHelp()" style="background: #8a2be2; color: white;">Request Human Help</button>
+                    <button onclick="closeFeedbackForm(${messageId})" style="background: #666; color: white;">Cancel</button>
+                </div>
+            `;
+            
+            const messageDiv = document.querySelector(`[data-message-id="${messageId}"]`);
+            messageDiv.insertAdjacentHTML('afterend', feedbackHtml);
+        }
+
+        function submitRating(messageId, rating) {
+            selectedRating = rating;
+            const buttons = document.querySelectorAll(`#feedback-${messageId} .rating-buttons button`);
+            buttons.forEach((btn, index) => {
+                btn.style.background = (index + 1) === rating ? '#00ffff' : '#8a2be2';
+                btn.style.color = (index + 1) === rating ? 'black' : 'white';
+            });
+        }
+
+        async function submitFeedback(messageId) {
+            if (!selectedRating) {
+                alert('Please select a rating first');
+                return;
+            }
+            
+            const comment = document.getElementById(`feedback-comment-${messageId}`).value;
+            const correctedAnswer = document.getElementById(`corrected-answer-${messageId}`).value;
+            
+            try {
+                const response = await fetch('/qa_bot/submit_feedback/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message_id: messageId,
+                        rating: selectedRating,
+                        comment: comment,
+                        corrected_answer: correctedAnswer
+                    })
+                });
+                
+                if (response.ok) {
+                    alert('Thank you for your feedback!');
+                    document.getElementById(`feedback-${messageId}`).remove();
+                    selectedRating = null;
+                }
+            } catch (error) {
+                alert('Error submitting feedback');
+            }
+        }
+
+        async function requestHumanHelp() {
+            try {
+                const response = await fetch('/qa_bot/request_human_help/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        question: document.getElementById('message-input').value
+                    })
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    alert(data.message);
+                }
+            } catch (error) {
+                alert('Error requesting human help');
+            }
+        }
+
+        function closeFeedbackForm(messageId) {
+            document.getElementById(`feedback-${messageId}`).remove();
+            selectedRating = null;
+        }
+
+        function updateAwaitingSourceNotice(show) {
+            const notice = document.getElementById('awaiting-source-notice');
+            const messageInput = document.getElementById('message-input');
+            const sendBtn = document.getElementById('send-btn');
+            
+            if (show) {
+                notice.style.display = 'block';
+                messageInput.disabled = true;
+                sendBtn.disabled = true;
+                messageInput.placeholder = 'Please add data sources first...';
+            } else {
+                notice.style.display = 'none';
+                messageInput.disabled = false;
+                sendBtn.disabled = false;
+                messageInput.placeholder = 'Ask KALASI Ninja a question...';
+            }
+            awaitingSource = show;
+        }
+
+        async function sendMessage() {
+            if (awaitingSource || isProcessing) return;
+            
+            const input = document.getElementById('message-input');
+            const message = input.value.trim();
+            if (!message) return;
+            
+            isProcessing = true;
+            const sendBtn = document.getElementById('send-btn');
+            sendBtn.disabled = true;
+            sendBtn.textContent = 'Processing...';
+            
+            addMessage('user', message);
+            input.value = '';
+            
+            try {
+                const response = await fetch('/qa_bot/send_message/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message, session_id: sessionId })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    addMessage('assistant', data.response, data.sources, data.message_id, data.confidence_score);
+                    updateAwaitingSourceNotice(data.awaiting_source);
+                } else {
+                    if (data.awaiting_source) {
+                        updateAwaitingSourceNotice(true);
+                        addMessage('assistant', data.error || 'Please add relevant data sources to continue.');
+                    } else {
+                        addMessage('assistant', `❌ Error: ${data.error}`);
+                    }
+                }
+            } catch (error) {
+                addMessage('assistant', `❌ Error: ${error.message}`);
+            } finally {
+                isProcessing = false;
+                sendBtn.disabled = false;
+                sendBtn.textContent = 'Send ⚡';
+            }
+        }
+
+        async function addDataSource() {
+            const sourceType = document.getElementById('source-type').value;
+            const sourceInput = document.getElementById('source-input').value.trim();
+            const addBtn = document.getElementById('add-source-btn');
+            
+            if (!sourceInput) {
+                alert('Please enter a URL');
+                return;
+            }
+            
+            addBtn.disabled = true;
+            addBtn.textContent = 'Processing...';
+            
+            try {
+                const response = await fetch('/qa_bot/add_data_source/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        source_type: sourceType,
+                        source_input: sourceInput,
+                        session_id: sessionId
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    alert(`✅ Added ${data.chunks_added} chunks to KALASI database!`);
+                    document.getElementById('source-input').value = '';
+                    
+                    if (data.retry_response) {
+                        addMessage('assistant', data.retry_response, data.sources);
+                    }
+                    
+                    updateAwaitingSourceNotice(data.awaiting_source || false);
+                } else {
+                    alert(`❌ Error: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`❌ Error: ${error.message}`);
+            } finally {
+                addBtn.disabled = false;
+                addBtn.textContent = 'Add URL Data';
+            }
+        }
+
+        async function uploadFile() {
+            const fileInput = document.getElementById('file-input');
+            const file = fileInput.files[0];
+            const uploadBtn = document.getElementById('upload-file-btn');
+            
+            if (!file) {
+                alert('Please select a file');
+                return;
+            }
+            
+            uploadBtn.disabled = true;
+            uploadBtn.textContent = 'Processing...';
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('session_id', sessionId);
+            
+            try {
+                const response = await fetch('/qa_bot/upload_file/', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    alert(`✅ Added ${data.chunks_added} chunks from ${file.name} to KALASI database!`);
+                    fileInput.value = '';
+                    
+                    if (data.retry_response) {
+                        addMessage('assistant', data.retry_response, data.sources);
+                    }
+                    
+                    updateAwaitingSourceNotice(data.awaiting_source || false);
+                } else {
+                    alert(`❌ Error: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`❌ Error: ${error.message}`);
+            } finally {
+                uploadBtn.disabled = false;
+                uploadBtn.textContent = 'Process File';
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !isProcessing) {
+                sendMessage();
+            }
+        }
+
+        window.onload = async function() {
+            try {
+                const response = await fetch(`/qa_bot/get_chat_history/?session_id=${sessionId}`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    data.messages.forEach(msg => {
+                        addMessage(msg.role, msg.content, msg.sources);
+                    });
+                    updateAwaitingSourceNotice(data.awaiting_source || false);
+                }
+            } catch (error) {
+                console.error('Error loading chat history:', error);
+            }
+        };
+    </script>
+</body>
+</html>
