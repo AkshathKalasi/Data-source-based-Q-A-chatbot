@@ -129,3 +129,9 @@ STATIC_URL = "static/"
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+
+
+# Human-in-the-Loop Configuration
+HITL_CONFIDENCE_THRESHOLD = float(os.getenv('HITL_CONFIDENCE_THRESHOLD', '0.6'))
+HITL_AUTO_ENABLE = os.getenv('HITL_AUTO_ENABLE', 'True').lower() == 'true'

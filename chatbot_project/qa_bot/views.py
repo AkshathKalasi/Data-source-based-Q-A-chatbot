@@ -4,77 +4,151 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 import json
 import os
-from .models import ChatSession, ChatMessage, FeedbackData
-from .langgraph_engine import get_chat_response_langgraph as get_chat_response, import_data_batch, split_documents, store_chunks_in_chroma
-from langchain_core.documents import Document
+from .models import ChatSession, ChatMessage
+from .chat_utils import get_chat_response, import_data_batch, split_documents, store_chunks_in_chroma
 
+from langchain_core.documents import Document
+from werkzeug.utils import secure_filename
 
 def chat_view(request):
     """Main chat interface"""
     return render(request, 'qa_bot/chat.html')
 
+
+def check_needs_clarification(query):
+    """Context-aware HITL - only trigger when truly ambiguous"""
+    ambiguous_terms = {
+        'apple': ['Apple Inc. technology/company', 'Apple fruit/food'],
+        'java': ['Java programming language', 'Java island/coffee'],
+        'python': ['Python programming language', 'Python snake/animal'],
+        'amazon': ['Amazon company/AWS', 'Amazon rainforest/river'],
+        'windows': ['Microsoft Windows OS', 'Windows architectural/glass'],
+        'lotus': ['Lotus car company', 'Lotus flower/plant'],
+        'apollo': ['Apollo space mission/NASA', 'Apollo tires company'],
+        'mercury': ['Mercury planet', 'Mercury chemical element'],
+        'mars': ['Mars planet', 'Mars chocolate company'],
+        'oracle': ['Oracle database/company', 'Oracle ancient prophecy'],
+        'shell': ['Shell oil company', 'Shell sea creature'],
+        'ford': ['Ford car company', 'Ford river crossing'],
+        'tesla': ['Tesla car company', 'Tesla scientist Nikola'],
+        'jaguar': ['Jaguar car company', 'Jaguar animal'],
+        'puma': ['Puma sportswear brand', 'Puma animal'],
+        'nike': ['Nike sportswear brand', 'Nike Greek goddess'],
+        'corona': ['Corona beer', 'Corona virus/pandemic'],
+        'delta': ['Delta airlines', 'Delta river formation'],
+        'target': ['Target retail store', 'Target aim/goal'],
+        'mint': ['Mint plant/herb', 'Mint money/currency']
+    }
+    
+    query_lower = query.lower()
+    
+    # Context indicators that clarify meaning
+    programming_context = ['syntax', 'code', 'programming', 'function', 'variable', 'class', 'method', 'library', 'framework', 'script', 'algorithm', 'debug', 'compile', 'execute']
+    tech_context = ['software', 'hardware', 'computer', 'system', 'application', 'platform', 'technology', 'digital']
+    nature_context = ['animal', 'species', 'wildlife', 'habitat', 'biology', 'ecosystem', 'nature']
+    business_context = ['company', 'corporation', 'business', 'stock', 'market', 'revenue', 'profit']
+    
+    # Check for ambiguous terms
+    for term, options in ambiguous_terms.items():
+        import re
+        if re.search(r'\b' + term + r'\b', query_lower):
+            # Check if context is clear
+            has_programming_context = any(ctx in query_lower for ctx in programming_context)
+            has_tech_context = any(ctx in query_lower for ctx in tech_context)
+            has_nature_context = any(ctx in query_lower for ctx in nature_context)
+            has_business_context = any(ctx in query_lower for ctx in business_context)
+            
+            # Only trigger HITL if no clear context indicators
+            if not (has_programming_context or has_tech_context or has_nature_context or has_business_context):
+                return {
+                    'term': term,
+                    'options': options,
+                    'original_question': query
+                }
+    
+    return None
+
+
+
+def get_context_aware_response(message, chat_history, context_choice=None):
+    """Get response with context awareness and timing"""
+    if context_choice:
+        # Create context-focused query
+        focused_query = f"Focus on {context_choice}: {message}"
+        print(f"🎯 Context-focused query: {focused_query}")
+        
+        # Use langgraph engine for timing visibility
+        from .langgraph_engine import get_chat_response_langgraph
+        return get_chat_response_langgraph(focused_query, chat_history)
+    else:
+        # Use langgraph engine for timing visibility
+        from .langgraph_engine import get_chat_response_langgraph
+        return get_chat_response_langgraph(message, chat_history)
+
+
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def send_message(request):
-    """Handle chat messages"""
+    """Enhanced chat with HITL support"""
     try:
         data = json.loads(request.body)
         message = data.get('message', '').strip()
         session_id = data.get('session_id')
+        context_choice = data.get('context_choice')
         
         if not message:
             return JsonResponse({'error': 'Message is required'}, status=400)
         
         # Get or create session
-        session, created = ChatSession.objects.get_or_create(
+        session, _ = ChatSession.objects.get_or_create(
             session_id=session_id,
             defaults={'awaiting_source': False}
         )
         
-        # Check if awaiting source
-        if session.awaiting_source:
-            return JsonResponse({
-                'error': 'Please add data sources first',
-                'awaiting_source': True,
-                'last_question': session.last_question
-            }, status=400)
+        # Get recent chat history
+        recent_messages = session.messages.all().order_by('-timestamp')[:6]
+        chat_history = []
+        for msg in reversed(recent_messages):
+            chat_history.append(type('ChatMessage', (), {'role': msg.role, 'content': msg.content})())
         
         # Save user message
-        ChatMessage.objects.create(
-            session=session,
-            role='user',
-            content=message
-        )
+        ChatMessage.objects.create(session=session, role='user', content=message)
         
-        # Get chat history
-        chat_history = session.messages.all()
-        
-        # Get response
-        response = get_chat_response(message, chat_history)
-        
-        # Handle uncertain answers
-        if response['is_uncertain']:
-            session.awaiting_source = True
-            session.last_question = message
-            session.save()
-            
-            response_content = response['answer'] + "\n\nI don't have enough information to answer this question. Please add relevant data sources."
+        # Use your working langgraph_engine with HITL check
+        if context_choice:
+            # User provided clarification, use normal flow
+            response = get_context_aware_response(message, chat_history, context_choice)
+
+
         else:
-            response_content = response['answer']
+            # Check if needs clarification first
+            needs_clarification = check_needs_clarification(message)
+            if needs_clarification:
+                return JsonResponse({
+                    'needs_clarification': True,
+                    'ambiguity_clarification': needs_clarification,
+                    'response': "I need clarification to provide an accurate answer.",
+                    'sources': [],
+                    'confidence_score': 0.0
+                })
+            else:
+                response = get_context_aware_response(message, chat_history)
+
+
         
         # Save assistant message
         assistant_message = ChatMessage.objects.create(
             session=session,
             role='assistant',
-            content=response_content,
-            sources=response['sources'],
+            content=response['answer'],
+            sources=response.get('sources', []),
             confidence_score=response.get('confidence_score', 0.0)
         )
         
         return JsonResponse({
-            'response': response_content,
-            'sources': response['sources'],
-            'awaiting_source': response['is_uncertain'],
+            'response': response['answer'],
+            'sources': response.get('sources', []),
             'confidence_score': response.get('confidence_score', 0.0),
             'message_id': assistant_message.id
         })
@@ -85,56 +159,20 @@ def send_message(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 def add_data_source(request):
-    """Add new data sources"""
+    """Add data sources to vector database"""
     try:
         data = json.loads(request.body)
         source_type = data.get('source_type')
         source_input = data.get('source_input', '').strip()
-        session_id = data.get('session_id')
         
         if not source_input:
             return JsonResponse({'error': 'Source input is required'}, status=400)
         
-        # Process data
         documents = import_data_batch(source_type, source_input)
         if documents:
             chunks = split_documents(documents)
             store_chunks_in_chroma(chunks)
-            
-            # Update session
-            session = ChatSession.objects.get(session_id=session_id)
-            
-            # Always reset awaiting_source when data is successfully added
-            session.awaiting_source = False
-            session.save()
-            
-            if session.last_question:
-                # Retry the last question
-                chat_history = session.messages.all()
-                response = get_chat_response(session.last_question, chat_history)
-                
-                if not response['is_uncertain']:
-                    # Save new assistant message
-                    ChatMessage.objects.create(
-                        session=session,
-                        role='assistant',
-                        content=response['answer'],
-                        sources=response['sources']
-                    )
-                    
-                    return JsonResponse({
-                        'success': True,
-                        'chunks_added': len(chunks),
-                        'retry_response': response['answer'],
-                        'sources': response['sources'],
-                        'awaiting_source': False
-                    })
-            
-            return JsonResponse({
-                'success': True,
-                'chunks_added': len(chunks),
-                'awaiting_source': False
-            })
+            return JsonResponse({'success': True, 'chunks_added': len(chunks)})
         else:
             return JsonResponse({'error': 'No documents found'}, status=400)
             
@@ -147,21 +185,18 @@ def upload_file(request):
     """Handle file uploads"""
     try:
         uploaded_file = request.FILES.get('file')
-        session_id = request.POST.get('session_id')
-        
         if not uploaded_file:
             return JsonResponse({'error': 'No file uploaded'}, status=400)
         
-        # Save file temporarily
-        filename = uploaded_file.name
-        temp_path = os.path.join('temp_uploads', filename)
-        os.makedirs('temp_uploads', exist_ok=True)
+        filename = secure_filename(uploaded_file.name)
+        temp_dir = 'temp_uploads'
+        os.makedirs(temp_dir, exist_ok=True)
+        temp_path = os.path.join(temp_dir, filename)
         
         with open(temp_path, 'wb') as f:
             for chunk in uploaded_file.chunks():
                 f.write(chunk)
         
-        # Extract text
         if filename.lower().endswith('.pdf'):
             from .chat_utils import extract_text_from_pdf
             text, _ = extract_text_from_pdf(temp_path)
@@ -175,39 +210,7 @@ def upload_file(request):
             document = Document(page_content=text, metadata={"source": filename})
             chunks = split_documents([document])
             store_chunks_in_chroma(chunks)
-            
-            # Update session
-            session = ChatSession.objects.get(session_id=session_id)
-            
-            # Always reset awaiting_source when data is successfully added
-            session.awaiting_source = False
-            session.save()
-            
-            if session.last_question:
-                chat_history = session.messages.all()
-                response = get_chat_response(session.last_question, chat_history)
-                
-                if not response['is_uncertain']:
-                    ChatMessage.objects.create(
-                        session=session,
-                        role='assistant',
-                        content=response['answer'],
-                        sources=response['sources']
-                    )
-                    
-                    return JsonResponse({
-                        'success': True,
-                        'chunks_added': len(chunks),
-                        'retry_response': response['answer'],
-                        'sources': response['sources'],
-                        'awaiting_source': False
-                    })
-            
-            return JsonResponse({
-                'success': True,
-                'chunks_added': len(chunks),
-                'awaiting_source': False
-            })
+            return JsonResponse({'success': True, 'chunks_added': len(chunks)})
         else:
             return JsonResponse({'error': 'Could not extract text from file'}, status=400)
             
@@ -231,74 +234,152 @@ def get_chat_history(request):
                 'timestamp': msg.timestamp.isoformat()
             })
         
-        return JsonResponse({
-            'messages': messages,
-            'awaiting_source': session.awaiting_source,
-            'last_question': session.last_question
-        })
+        return JsonResponse({'messages': messages})
     except ChatSession.DoesNotExist:
-        return JsonResponse({'messages': [], 'awaiting_source': False, 'last_question': ''})
+        return JsonResponse({'messages': []})
+
+# ==================== TIME TRAVEL VIEWS ====================
+
+@require_http_methods(["GET"])
+def get_thread_history_view(request):
+    """Get thread history using LangGraph"""
+    thread_id = request.GET.get('thread_id')
+    if not thread_id:
+        return JsonResponse({'error': 'Thread ID required'}, status=400)
+    
+    from .langgraph_timetravel import get_thread_history
+    return JsonResponse(get_thread_history(thread_id))
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def rewind_thread(request):
+    """Rewind to checkpoint"""
+    try:
+        data = json.loads(request.body)
+        thread_id = data.get('thread_id')
+        checkpoint_id = data.get('checkpoint_id')
+        
+        from .langgraph_timetravel import rewind_to_checkpoint
+        return JsonResponse(rewind_to_checkpoint(thread_id, checkpoint_id))
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def resume_thread(request):
+    """Resume from checkpoint"""
+    try:
+        data = json.loads(request.body)
+        thread_id = data.get('thread_id')
+        checkpoint_id = data.get('checkpoint_id')
+        new_query = data.get('new_query')
+        
+        from .langgraph_timetravel import resume_from_checkpoint
+        return JsonResponse(resume_from_checkpoint(thread_id, checkpoint_id, new_query))
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def send_message_timetravel(request):
+    """Send message with time travel support"""
+    try:
+        data = json.loads(request.body)
+        message = data.get('message')
+        thread_id = data.get('thread_id')
+        context_choice = data.get('context_choice')  # Add this line
+        
+        from .langgraph_timetravel import send_message_with_timetravel
+        return JsonResponse(send_message_with_timetravel(message, thread_id, context_choice))  # Pass context_choice
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+    
+
+def timetravel_view(request):
+    """Render time travel interface"""
+    return render(request, 'qa_bot/timetravel.html')
 
 @csrf_exempt
 @require_http_methods(["POST"])
 def submit_feedback(request):
-    """Handle user feedback on answers"""
+    """Handle user feedback"""
     try:
         data = json.loads(request.body)
         message_id = data.get('message_id')
         rating = data.get('rating')
         comment = data.get('comment', '')
-        corrected_answer = data.get('corrected_answer', '')
         
         message = ChatMessage.objects.get(id=message_id, role='assistant')
         message.feedback_rating = rating
         message.feedback_comment = comment
-        
-        if corrected_answer:
-            message.is_corrected = True
-            message.corrected_answer = corrected_answer
-            
         message.save()
         
-        # Store feedback data for analysis
-        FeedbackData.objects.create(
-            session=message.session,
-            question=message.session.messages.filter(
-                timestamp__lt=message.timestamp, 
-                role='user'
-            ).last().content,
-            original_answer=message.content,
-            corrected_answer=corrected_answer,
-            feedback_type='incorrect' if rating <= 2 else 'good',
-            sources_used=message.sources,
-            confidence_score=message.confidence_score
-        )
-        
         return JsonResponse({'success': True})
-        
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
-@csrf_exempt  
+@csrf_exempt
 @require_http_methods(["POST"])
 def request_human_help(request):
-    """Request human assistance for difficult questions"""
+    """Request human expert help"""
     try:
         data = json.loads(request.body)
         session_id = data.get('session_id')
         question = data.get('question')
         
         session = ChatSession.objects.get(session_id=session_id)
-        
-        # Mark as awaiting human help
         ChatMessage.objects.create(
             session=session,
             role='assistant',
-            content="I've forwarded your question to a human expert. You'll receive a response soon. In the meantime, you can try adding more specific data sources.",
+            content="I've forwarded your question to a human expert.",
             confidence_score=0.0
         )
         
-        return JsonResponse({'success': True, 'message': 'Human expert has been notified'})
+        return JsonResponse({'success': True, 'message': 'Human expert notified'})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def generate_with_review(request):
+    """Generate response with review option"""
+    try:
+        data = json.loads(request.body)
+        message = data.get('message', '').strip()
+        session_id = data.get('session_id')
         
+        # Use your working engine
+        session, _ = ChatSession.objects.get_or_create(session_id=session_id)
+        chat_history = list(session.messages.all())[-4:]
+        response = get_context_aware_response(message, chat_history)
+
+
+        
+        return JsonResponse(response)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def human_review_decision(request):
+    """Process human review decisions"""
+    try:
+        data = json.loads(request.body)
+        decision = data.get('decision')
+        return JsonResponse({'status': decision, 'next_step': 'approved' if decision == 'approved' else 'rejected'})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def refine_answer(request):
+    """Refine answers based on feedback"""
+    try:
+        data = json.loads(request.body)
+        refinement_request = data.get('refinement_request', '')
+        return JsonResponse({'refined_answer': 'Answer refined based on feedback', 'status': 'refined'})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)

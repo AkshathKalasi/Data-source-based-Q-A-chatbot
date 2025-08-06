@@ -201,6 +201,8 @@ def create_chat_graph():
     
     return workflow.compile()
 
+#================ = Chat Response with LangGraph ==================
+
 def get_chat_response_langgraph(prompt, chat_history):
     try:
         overall_start = time.time()  # Fixed variable name
@@ -248,3 +250,57 @@ def get_chat_response_langgraph(prompt, chat_history):
             'query_sentiment': {"sentiment": "neutral", "polarity": 0.0, "subjectivity": 0.0},
             'answer_sentiment': {"sentiment": "neutral", "polarity": 0.0, "subjectivity": 0.0}
         }
+
+
+
+# ====================================================================
+
+def create_chat_graph_with_human_review():
+    """Enhanced chat graph with human review capability"""
+    workflow = StateGraph(ChatState)
+    
+    # Reuse existing optimized nodes
+    workflow.add_node("retrieve", retrieve_documents_node)
+    workflow.add_node("context", build_context_node)
+    workflow.add_node("confidence", calculate_confidence_node)
+    workflow.add_node("sentiment", analyze_sentiment_node)
+    workflow.add_node("generate", generate_answer_node)
+    workflow.add_node("human_review", lambda state: state)  # Placeholder
+    workflow.add_node("refine", generate_answer_node)
+    
+    workflow.set_entry_point("retrieve")
+    
+    # Parallel processing preserved
+    workflow.add_edge("retrieve", "context")
+    workflow.add_edge("retrieve", "confidence") 
+    workflow.add_edge("retrieve", "sentiment")
+    workflow.add_edge("context", "generate")
+    workflow.add_edge("confidence", END)
+    workflow.add_edge("sentiment", END)
+    
+    # Human review flow
+    workflow.add_conditional_edges(
+        "generate",
+        lambda state: "human_review" if state.get("needs_review", False) else END,
+        {
+            True: "human_review",
+            False: END
+        }
+    )
+    
+    workflow.add_conditional_edges(
+        "human_review",
+        lambda state: state.get("human_decision", "pending"),
+        {
+            "approved": "refine",
+            "rejected": "generate",
+            "pending": END
+        }
+    )
+    
+    workflow.add_edge("refine", END)
+    
+    return workflow.compile(
+        interrupt_before=["human_review"],
+        interrupt_after=["generate"]
+    )

@@ -436,7 +436,8 @@
             document.getElementById(`${tabName}-tab`).classList.add('active');
         }
 
-        function addMessage(role, content, sources = [], messageId = null, confidenceScore = null) {
+
+        function addMessage(role, content, sources = [], messageId = null, confidenceScore = null, ambiguityClarification = null, hitlInfo = null) {
             const messagesDiv = document.getElementById('chat-messages');
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${role}-message`;
@@ -474,8 +475,87 @@
             `;
             
             messagesDiv.appendChild(messageDiv);
+            
+            // Add small comment box below for HITL warning and/or ambiguity clarification
+            if ((hitlInfo || ambiguityClarification) && role === 'assistant') {
+                const commentDiv = document.createElement('div');
+                commentDiv.className = 'comment-box';
+                commentDiv.style.cssText = `
+                    background: rgba(255, 165, 0, 0.1);
+                    border: 1px solid rgba(255, 165, 0, 0.3);
+                    border-radius: 8px;
+                    padding: 8px;
+                    margin: 5px 0;
+                    font-size: 11px;
+                    color: #ffa500;
+                `;
+                
+                let commentContent = '';
+                
+                // Add HITL warning if present
+                if (hitlInfo) {
+                    commentContent += `<div style="margin-bottom: 5px;">${hitlInfo.message}</div>`;
+                }
+                
+                // Add ambiguity clarification if present
+                if (ambiguityClarification) {
+                    commentContent += `
+                        <div style="margin-bottom: 5px;">
+                            <strong>💡 Did you mean "${ambiguityClarification.term}" as:</strong>
+                        </div>
+                        <div style="text-align: center;">
+                            <button onclick="handleClarification('${ambiguityClarification.original_question}', '${ambiguityClarification.options[0]}', ${messageId})" 
+                                    style="background: #ffa500; color: black; border: none; padding: 4px 8px; margin: 2px; border-radius: 10px; cursor: pointer; font-size: 10px;">
+                                ${ambiguityClarification.options[0]}
+                            </button>
+                            <button onclick="handleClarification('${ambiguityClarification.original_question}', '${ambiguityClarification.options[1]}', ${messageId})" 
+                                    style="background: #ffa500; color: black; border: none; padding: 4px 8px; margin: 2px; border-radius: 10px; cursor: pointer; font-size: 10px;">
+                                ${ambiguityClarification.options[1]}
+                            </button>
+                        </div>
+                    `;
+                }
+                
+                commentDiv.innerHTML = commentContent;
+                messagesDiv.appendChild(commentDiv);
+            }
+            
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
+
+         // Handle ambiguity clarification               
+
+        function handleClarification(originalQuestion, selectedContext, messageId) {
+            fetch('/qa_bot/send_message/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: originalQuestion,
+                    session_id: sessionId,
+                    context_choice: selectedContext
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.response) {
+                    addMessage('assistant', data.response, data.sources, data.message_id, data.confidence_score, data.ambiguity_clarification, data.hitl_info);
+                    
+                    // Remove clarification comment box
+                    const messageDiv = document.querySelector(`[data-message-id="${messageId}"]`);
+                    if (messageDiv) {
+                        const commentDiv = messageDiv.nextElementSibling;
+                        if (commentDiv && commentDiv.classList.contains('comment-box')) {
+                            commentDiv.remove();
+                        }
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                addMessage('assistant', '❌ Error processing clarification');
+            });
+        }
+
 
         function showFeedbackForm(messageId) {
             const feedbackHtml = `
@@ -609,7 +689,8 @@
                 const data = await response.json();
                 
                 if (response.ok) {
-                    addMessage('assistant', data.response, data.sources, data.message_id, data.confidence_score);
+                    // FIXED: Pass both ambiguity clarification and HITL info
+                    addMessage('assistant', data.response, data.sources, data.message_id, data.confidence_score, data.ambiguity_clarification, data.hitl_info);
                     updateAwaitingSourceNotice(data.awaiting_source);
                 } else {
                     if (data.awaiting_source) {
@@ -627,6 +708,8 @@
                 sendBtn.textContent = 'Send ⚡';
             }
         }
+
+
 
         async function addDataSource() {
             const sourceType = document.getElementById('source-type').value;
@@ -741,5 +824,6 @@
             }
         };
     </script>
+
 </body>
 </html>
