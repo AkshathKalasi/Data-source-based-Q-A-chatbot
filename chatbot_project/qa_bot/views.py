@@ -38,25 +38,34 @@ def check_needs_clarification(query):
         'delta': ['Delta airlines', 'Delta river formation'],
         'target': ['Target retail store', 'Target aim/goal'],
         'mint': ['Mint plant/herb', 'Mint money/currency']
-    }
+    } 
     
     query_lower = query.lower()
     
-    # Context indicators that clarify meaning
+    # Enhanced context indicators with global context phrases
     programming_context = ['syntax', 'code', 'programming', 'function', 'variable', 'class', 'method', 'library', 'framework', 'script', 'algorithm', 'debug', 'compile', 'execute']
     tech_context = ['software', 'hardware', 'computer', 'system', 'application', 'platform', 'technology', 'digital']
-    nature_context = ['animal', 'species', 'wildlife', 'habitat', 'biology', 'ecosystem', 'nature']
-    business_context = ['company', 'corporation', 'business', 'stock', 'market', 'revenue', 'profit']
+    nature_context = ['animal', 'species', 'wildlife', 'habitat', 'biology', 'ecosystem', 'nature', 'flower', 'plant', 'botanical', 'garden', 'bloom', 'petal', 'leaf', 'cat', 'big cat', 'predator', 'mammal', 'carnivore']
+    business_context = ['company', 'corporation', 'business', 'stock', 'market', 'revenue', 'profit', 'manufacturer', 'automotive', 'car', 'vehicle', 'transportation', 'engine', 'model', 'design', 'performance', 'safety', 'luxury', 'electric', 'hybrid']
     
-    # Check for ambiguous terms
+    # Global context phrases that indicate general knowledge queries
+    global_context_phrases = ['tell me about', 'what are', 'about the', 'information about', 'facts about', 'describe', 'explain']
+    
+    # Check for ambiguous terms (handle both singular and plural)
     for term, options in ambiguous_terms.items():
         import re
-        if re.search(r'\b' + term + r'\b', query_lower):
+        # Match both singular and plural forms
+        if re.search(r'\b' + term + r's?\b', query_lower):
             # Check if context is clear
             has_programming_context = any(ctx in query_lower for ctx in programming_context)
             has_tech_context = any(ctx in query_lower for ctx in tech_context)
             has_nature_context = any(ctx in query_lower for ctx in nature_context)
             has_business_context = any(ctx in query_lower for ctx in business_context)
+            has_global_context = any(phrase in query_lower for phrase in global_context_phrases)
+            
+            # For global context phrases, assume nature/animal context for biological terms
+            if has_global_context and term in ['jaguar', 'puma']:
+                return None  # Don't trigger HITL for general animal queries
             
             # Only trigger HITL if no clear context indicators
             if not (has_programming_context or has_tech_context or has_nature_context or has_business_context):
@@ -381,5 +390,103 @@ def refine_answer(request):
         data = json.loads(request.body)
         refinement_request = data.get('refinement_request', '')
         return JsonResponse({'refined_answer': 'Answer refined based on feedback', 'status': 'refined'})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+# Add these imports at the top
+from .time_travel_engine import TimeTravelEngine
+from .session_tree_manager import SessionTreeManager
+from .models import SessionTree, NodeExecution, ExecutionCheckpoint
+
+# Add these views at the end of views.py
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def execute_with_timetravel(request):
+    """Execute with time travel support"""
+    try:
+        data = json.loads(request.body)
+        message = data.get('message')
+        thread_id = data.get('thread_id')
+        rerun_nodes = data.get('rerun_nodes', [])
+        context_choice = data.get('context_choice')
+        
+        from .langgraph_timetravel import execute_with_time_travel
+        result = execute_with_time_travel(
+            message=message,
+            thread_id=thread_id,
+            rerun_nodes=set(rerun_nodes) if rerun_nodes else None,
+            context_choice=context_choice
+        )
+        
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def rerun_nodes(request):
+    """Re-run specific nodes"""
+    try:
+        data = json.loads(request.body)
+        thread_id = data.get('thread_id')
+        node_names = data.get('node_names', [])
+        new_query = data.get('new_query')
+        
+        from .langgraph_timetravel import rerun_specific_nodes
+        result = rerun_specific_nodes(thread_id, node_names, new_query)
+        
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@require_http_methods(["GET"])
+def get_session_tree(request):
+    """Get session tree structure"""
+    thread_id = request.GET.get('thread_id')
+    if not thread_id:
+        return JsonResponse({'error': 'Thread ID required'}, status=400)
+    
+    from .langgraph_timetravel import get_session_tree_view
+    return JsonResponse(get_session_tree_view(thread_id))
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def create_branch(request):
+    """Create new branch from node"""
+    try:
+        data = json.loads(request.body)
+        node_id = data.get('node_id')
+        new_query = data.get('new_query')
+        
+        from .langgraph_timetravel import create_branch_from_node
+        result = create_branch_from_node(node_id, new_query)
+        
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@require_http_methods(["GET"])
+def get_execution_metrics(request):
+    """Get execution metrics for thread"""
+    thread_id = request.GET.get('thread_id')
+    if not thread_id:
+        return JsonResponse({'error': 'Thread ID required'}, status=400)
+    
+    try:
+        executions = NodeExecution.objects.filter(thread_id=thread_id).order_by('-executed_at')
+        
+        metrics = []
+        for exec in executions:
+            metrics.append({
+                'node_name': exec.node_name,
+                'runtime_ms': exec.runtime_ms,
+                'executed_at': exec.executed_at.isoformat(),
+                'cache_key': exec.cache_key
+            })
+        
+        return JsonResponse({'metrics': metrics})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)

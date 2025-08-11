@@ -24,4 +24,14 @@ urlpatterns = [
     path('generate_with_review/', views.generate_with_review, name='generate_with_review'),
     path('human_review_decision/', views.human_review_decision, name='human_review_decision'),
     path('refine_answer/', views.refine_answer, name='refine_answer'),
+
+
+    # Time Travel and Session Tree endpoints
+
+    path('api/timetravel/execute/', views.execute_with_timetravel, name='execute_timetravel'),
+    path('api/timetravel/rerun/', views.rerun_nodes, name='rerun_nodes'),
+    path('api/timetravel/tree/', views.get_session_tree, name='get_session_tree'),
+    path('api/timetravel/branch/', views.create_branch, name='create_branch'),
+    path('api/timetravel/metrics/', views.get_execution_metrics, name='execution_metrics'),
+
 ]

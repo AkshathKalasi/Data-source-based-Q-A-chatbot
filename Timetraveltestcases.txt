@@ -1,180 +1,184 @@
-Time Travel Test Cases
-=========================================================================================================
-1. send_message_timetravel (5 Test Cases)
+# ====================================================================
+# TIME TRAVEL & SESSION TREE CLI TEST COMMANDS
+# ====================================================================
 
-Test Case 1: Basic Message
-POST /qa_bot/send_message_timetravel/
-{
-    "message": "What is Python programming?",
-    "thread_id": "test-basic-001"
-}
+# PREREQUISITE: Navigate to project directory
+cd d:\chatbot_web\chatbot_project
 
-Test Case 2: With Context Choice
-POST /qa_bot/send_message_timetravel/
-{
-    "message": "Tell me about Java",
-    "thread_id": "test-context-002",
-    "context_choice": "Java programming language"
-}
+# ====================================================================
+# FEATURE 1: TIME TRAVEL EXECUTION TESTS
+# ====================================================================
 
+# Test Case 1: Basic Pipeline Execution
+python manage.py timetravel execute --message "What is JavaScript?" --thread-id "tt_test_001" --context "JavaScript programming language"
 
-Test Case 3: Ambiguous Query (Triggers HITL)
-POST /qa_bot/send_message_timetravel/
-{
-    "message": "What is Apple?",
-    "thread_id": "test-ambiguous-003"
-}
+# Test Case 2: View Execution History
+python manage.py timetravel history --thread-id "tt_test_001"
 
-Test Case 4: Continue Conversation
-POST /qa_bot/send_message_timetravel/
-{
-    "message": "Tell me more about its syntax",
-    "thread_id": "test-basic-001"
-}
+# Test Case 3: Re-run Specific Nodes
+python manage.py timetravel rerun --thread-id "tt_test_001" --nodes "generate" --message "What is JavaScript used for?"
+## can run retrieve, context, confidence , sentiment , generate nodes.
 
+# Rerun just the generate node
+python manage.py timetravel rerun --thread-id "tt_test_001" --nodes "generate" --message "What is JavaScript used for?"
 
-Test Case 5: Auto-Generated Thread ID
-POST /qa_bot/send_message_timetravel/
-{
-    "message": "Explain machine learning basics"
-}
+# Rerun multiple nodes (comma-separated)
+python manage.py timetravel rerun --thread-id "tt_test_001" --nodes "retrieve,generate" --message "Updated question"
 
-===================================================================================================
-2. get_thread_history (5 Test Cases)
+# Rerun sentiment analysis
+python manage.py timetravel rerun --thread-id "tt_test_001" --nodes "sentiment" --message "New message"
+
+# Rerun confidence calculation
+python manage.py timetravel rerun --thread-id "tt_test_001" --nodes "confidence" --message "Recalculate confidence"
 
 
-Test Case 1: Valid Thread with History
-GET /qa_bot/get_thread_history/?thread_id=test-basic-001
+# Test Case 4: Ambiguity Detection (HITL)
+python manage.py timetravel execute --message "What is Apple?" --thread-id "tt_test_002"
+
+# Test Case 5: Ambiguity with Context
+python manage.py timetravel execute --message "What is Apple?" --thread-id "tt_test_002b" --context "Apple Inc. technology company"
+
+# Test Case 6: Multiple Executions Same Thread
+python manage.py timetravel execute --message "Explain Python loops" --thread-id "tt_test_003" --context "Python programming"
+python manage.py timetravel execute --message "Python data types" --thread-id "tt_test_003" --context "Python programming"
+python manage.py timetravel history --thread-id "tt_test_003"
+
+# Test Case 7: Different Programming Languages
+python manage.py timetravel execute --message "What is Java?" --thread-id "tt_test_004" --context "Java programming language"
+python manage.py timetravel execute --message "What is C++?" --thread-id "tt_test_005" --context "C++ programming language"
+python manage.py timetravel execute --message "What is React?" --thread-id "tt_test_006" --context "React JavaScript library"
+
+# Test Case 8: Cache Effectiveness Test
+python manage.py timetravel execute --message "What is Docker?" --thread-id "cache_test" --context "Docker containerization"
+python manage.py timetravel execute --message "What is Docker?" --thread-id "cache_test" --context "Docker containerization"
+python manage.py timetravel history --thread-id "cache_test"
+
+# Test Case 9: Complex Technical Queries
+python manage.py timetravel execute --message "Explain machine learning algorithms" --thread-id "ml_thread" --context "machine learning technology"
+python manage.py timetravel execute --message "What is neural network?" --thread-id "ml_thread" --context "machine learning technology"
+python manage.py timetravel history --thread-id "ml_thread"
+
+# Test Case 10: Rewind Functionality (if checkpoint available)
+python manage.py timetravel rewind --thread-id "tt_test_001" --checkpoint "checkpoint_id_from_history"
+
+# ====================================================================
+# FEATURE 2: SESSION TREE MANAGEMENT TESTS
+# ====================================================================
+
+# Test Case 11: View Session Tree for Thread
+python manage.py sessiontree tree --thread-id "tt_test_001"
+python manage.py sessiontree tree --thread-id "tt_test_003"
+python manage.py sessiontree tree --thread-id "ml_thread"
 
 
-Test Case 2: Empty Thread
-GET /qa_bot/get_thread_history/?thread_id=empty-thread-999
+# // There is a issue that it does not show the parent id and node id. NEED tO BE FIXED.
+# Test Case 12: Create Branch (replace node_id with actual ID from tree output)
+python manage.py sessiontree branch --parent-id "node_id_from_tree_output" --message "What is TypeScript?"
 
+# Test Case 13: Explore Django Session (replace with actual session UUID from web UI)
+python manage.py sessiontree explore --session-id "your_django_session_uuid_here"
 
-Test Case 3: Long Conversation Thread
-GET /qa_bot/get_thread_history/?thread_id=long-conversation-456
+# Test Case 14: Multiple Tree Views
+python manage.py sessiontree tree --thread-id "tt_test_004"
+python manage.py sessiontree tree --thread-id "tt_test_005"
+python manage.py sessiontree tree --thread-id "tt_test_006"
 
+# ====================================================================
+# ERROR HANDLING & EDGE CASE TESTS
+# ====================================================================
 
-Test Case 4: Missing Thread ID (Error Case)
-GET /qa_bot/get_thread_history/
+# Test Case 15: Missing Parameters
+python manage.py timetravel execute
+python manage.py timetravel history
+python manage.py sessiontree tree
 
+# Test Case 16: Invalid Thread/Session IDs
+python manage.py timetravel history --thread-id "nonexistent_thread"
+python manage.py sessiontree tree --thread-id "invalid_thread_id"
+python manage.py sessiontree explore --session-id "invalid-uuid-format"
 
-Test Case 5: Special Characters in Thread ID
-GET /qa_bot/get_thread_history/?thread_id=test-special-chars_123@domain
+# Test Case 17: Empty Results
+python manage.py timetravel history --thread-id "never_used_thread"
+python manage.py sessiontree tree --thread-id "empty_thread"
 
-=================================================================================================================
-3. rewind_to_checkpoint (5 Test Cases)
+# ====================================================================
+# PERFORMANCE & STRESS TESTS
+# ====================================================================
 
+# Test Case 18: Large Thread History
+python manage.py timetravel execute --message "Question 1 about programming" --thread-id "large_thread" --context "programming"
+python manage.py timetravel execute --message "Question 2 about databases" --thread-id "large_thread" --context "database technology"
+python manage.py timetravel execute --message "Question 3 about web development" --thread-id "large_thread" --context "web development"
+python manage.py timetravel execute --message "Question 4 about cloud computing" --thread-id "large_thread" --context "cloud technology"
+python manage.py timetravel execute --message "Question 5 about cybersecurity" --thread-id "large_thread" --context "cybersecurity"
+python manage.py timetravel history --thread-id "large_thread"
+python manage.py sessiontree tree --thread-id "large_thread"
 
-Test Case 1: Valid Checkpoint
-POST /qa_bot/rewind_thread/
-{
-    "thread_id": "test-basic-001",
-    "checkpoint_id": "1f072889-91a5-605e-8003-f32a0b5aeac8"
-}
+# Test Case 19: Rapid Sequential Executions
+python manage.py timetravel execute --message "What is HTML?" --thread-id "rapid_test" --context "HTML markup language"
+python manage.py timetravel execute --message "What is CSS?" --thread-id "rapid_test" --context "CSS styling language"
+python manage.py timetravel execute --message "What is Bootstrap?" --thread-id "rapid_test" --context "Bootstrap CSS framework"
+python manage.py timetravel history --thread-id "rapid_test"
 
+# ====================================================================
+# COMPREHENSIVE WORKFLOW TESTS
+# ====================================================================
 
-Test Case 2: Invalid Checkpoint ID
-POST /qa_bot/rewind_thread/
-{
-    "thread_id": "test-basic-001",
-    "checkpoint_id": "invalid-checkpoint-id"
-}
+# Test Case 20: Complete Workflow
+python manage.py timetravel execute --message "Explain REST API" --thread-id "workflow_test" --context "REST API web development"
+python manage.py sessiontree tree --thread-id "workflow_test"
+python manage.py timetravel history --thread-id "workflow_test"
+python manage.py timetravel rerun --thread-id "workflow_test" --nodes "generate" --message "REST API best practices"
+python manage.py timetravel history --thread-id "workflow_test"
+python manage.py sessiontree tree --thread-id "workflow_test"
 
+# Test Case 21: Cross-Thread Analysis
+python manage.py timetravel execute --message "What is MongoDB?" --thread-id "db_thread_1" --context "MongoDB database"
+python manage.py timetravel execute --message "What is PostgreSQL?" --thread-id "db_thread_2" --context "PostgreSQL database"
+python manage.py timetravel execute --message "What is Redis?" --thread-id "db_thread_3" --context "Redis database"
+python manage.py timetravel history --thread-id "db_thread_1"
+python manage.py timetravel history --thread-id "db_thread_2"
+python manage.py timetravel history --thread-id "db_thread_3"
 
-Test Case 3: Non-existent Thread
-POST /qa_bot/rewind_thread/
-{
-    "thread_id": "non-existent-thread",
-    "checkpoint_id": "1f072889-91a5-605e-8003-f32a0b5aeac8"
-}
+# ====================================================================
+# VALIDATION TESTS
+# ====================================================================
 
+# Test Case 22: Verify Time Travel Features
+python manage.py timetravel execute --message "What is Kubernetes?" --thread-id "validation_test" --context "Kubernetes container orchestration"
+python manage.py timetravel history --thread-id "validation_test"
+python manage.py sessiontree tree --thread-id "validation_test"
 
-Test Case 4: Missing Parameters
-POST /qa_bot/rewind_thread/
-{
-    "thread_id": "test-basic-001"
-}
+# Test Case 23: Verify Session Tree Features
+python manage.py timetravel execute --message "What is DevOps?" --thread-id "devops_thread" --context "DevOps methodology"
+python manage.py sessiontree tree --thread-id "devops_thread"
 
+# ====================================================================
+# FINAL VERIFICATION COMMANDS
+# ====================================================================
 
-Test Case 5: Early Checkpoint
-POST /qa_bot/rewind_thread/
-{
-    "thread_id": "test-basic-001",
-    "checkpoint_id": "1f072888-f7ff-6eed-8000-017fb9c1b0ff"
-}
+# List all created threads (manual verification)
+echo "=== CREATED THREADS FOR TESTING ==="
+echo "tt_test_001, tt_test_002, tt_test_002b, tt_test_003, tt_test_004"
+echo "tt_test_005, tt_test_006, cache_test, ml_thread, large_thread"
+echo "rapid_test, workflow_test, db_thread_1, db_thread_2, db_thread_3"
+echo "validation_test, devops_thread"
 
-==========================================================================================================
-4. resume_from_checkpoint (5 Test Cases)
+# Quick verification of key threads
+python manage.py timetravel history --thread-id "tt_test_001"
+python manage.py sessiontree tree --thread-id "tt_test_001"
+python manage.py timetravel history --thread-id "large_thread"
+python manage.py sessiontree tree --thread-id "large_thread"
 
-
-Test Case 1: Resume with New Query
-POST /qa_bot/resume_thread/
-{
-    "thread_id": "test-basic-001",
-    "checkpoint_id": "1f072889-91a5-605e-8003-f32a0b5aeac8",
-    "new_query": "What are Python's advantages over Java?"
-}
-
-
-Test Case 2: Resume with Context Choice
-POST /qa_bot/resume_thread/
-{
-    "thread_id": "test-context-002",
-    "checkpoint_id": "checkpoint-id-here",
-    "new_query": "Tell me about Python",
-    "context_choice": "Python programming language"
-}
-
-
-Test Case 3: Resume with Ambiguous Query
-POST /qa_bot/resume_thread/
-{
-    "thread_id": "test-basic-001",
-    "checkpoint_id": "checkpoint-id-here",
-    "new_query": "What about Oracle?"
-}
-
-
-Test Case 4: Resume from Early Checkpoint
-POST /qa_bot/resume_thread/
-{
-    "thread_id": "test-basic-001",
-    "checkpoint_id": "1f072888-f7ff-6eed-8000-017fb9c1b0ff",
-    "new_query": "Explain data structures in programming"
-}
-
-
-Test Case 5: Missing New Query
-POST /qa_bot/resume_thread/
-{
-    "thread_id": "test-basic-001",
-    "checkpoint_id": "checkpoint-id-here"
-}
-
-=========================================================================================================
-
-Complete Test Flow Example:
-
-
-# 1. Start conversation
-POST /qa_bot/send_message_timetravel/
-{"message": "What is Python?", "thread_id": "flow-test"}
-
-# 2. Continue conversation  
-POST /qa_bot/send_message_timetravel/
-{"message": "Tell me about its syntax", "thread_id": "flow-test"}
-
-# 3. Get history
-GET /qa_bot/get_thread_history/?thread_id=flow-test
-
-# 4. Rewind to checkpoint
-POST /qa_bot/rewind_thread/
-{"thread_id": "flow-test", "checkpoint_id": "CHECKPOINT_FROM_STEP_3"}
-
-# 5. Resume with different question
-POST /qa_bot/resume_thread/
-{"thread_id": "flow-test", "checkpoint_id": "SAME_CHECKPOINT", "new_query": "What about Java instead?"}
-
-
-These test cases cover all scenarios: success cases, error cases, edge cases, and integration flows! 🚀
+# ====================================================================
+# NOTES FOR TESTING
+# ====================================================================
+# 1. Run commands sequentially for best results
+# 2. Replace "node_id_from_tree_output" with actual node IDs from tree command outputs
+# 3. Replace "your_django_session_uuid_here" with actual session UUID from web interface
+# 4. Each execution takes ~15-20 seconds due to vector database loading
+# 5. Monitor execution logs for timing information
+# 6. Check for cached vs executed nodes in history output
+# 7. Verify session tree stores question/response pairs correctly
+# 8. Test error handling with invalid parameters
+# ====================================================================

@@ -97,3 +97,46 @@ class HumanReview(models.Model):
     decision = models.CharField(max_length=10, choices=DECISION_CHOICES, default='pending')
     reviewed_at = models.DateTimeField(null=True, blank=True)
 
+
+# Add these models to the end of your models.py file:
+
+# ==================== TIME TRAVEL & SESSION TREE MODELS ====================
+
+class SessionTree(models.Model):
+    """Tree structure for session history"""
+    session_id = models.UUIDField(default=uuid.uuid4, unique=True)
+    thread_id = models.CharField(max_length=100, db_index=True)
+    parent_node = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='children')
+    node_type = models.CharField(max_length=20, choices=[('question', 'Question'), ('response', 'Response')])
+    content = models.TextField()
+    metadata = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        indexes = [models.Index(fields=['thread_id', 'created_at'])]
+
+class NodeExecution(models.Model):
+    """Track individual node executions for time travel"""
+    execution_id = models.UUIDField(default=uuid.uuid4, unique=True)
+    thread_id = models.CharField(max_length=100, db_index=True)
+    node_name = models.CharField(max_length=50)
+    input_data = models.JSONField(default=dict)
+    output_data = models.JSONField(default=dict)
+    runtime_ms = models.IntegerField(default=0)
+    dependencies = models.JSONField(default=list)  # List of node names this depends on
+    cache_key = models.CharField(max_length=255, db_index=True)
+    executed_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        indexes = [models.Index(fields=['thread_id', 'executed_at'])]
+
+class ExecutionCheckpoint(models.Model):
+    """Store execution states for time travel"""
+    checkpoint_id = models.UUIDField(default=uuid.uuid4, unique=True)
+    thread_id = models.CharField(max_length=100, db_index=True)
+    state_data = models.JSONField(default=dict)
+    node_executions = models.ManyToManyField(NodeExecution, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        indexes = [models.Index(fields=['thread_id', 'created_at'])]
